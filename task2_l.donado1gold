@@ -1,0 +1,28 @@
+using gold.structures.automaton.*
+using gold.visualization.automaton.*
+
+procedure main(args:String[]) begin
+	Q := (0‥5)
+	Σ := {'0','1','2'}
+	q := 0
+	F := {3}
+	A := GDeterministicAutomaton(Q, Σ, q, F, δ)
+	GAutomataFrame.show(A)
+end
+
+function δ(q, σ) begin
+	if σ = '0' then
+		return q
+	elseif σ = '1' then
+		if q < 3 then
+			return q + 3
+		else
+			return q - 3
+		end
+	elseif σ = '2' then
+		return (q ÷ 3) * 3 + ((q % 3 + 1) % 3)
+	else
+		return q
+	end
+end
+

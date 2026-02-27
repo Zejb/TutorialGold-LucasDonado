@@ -1,0 +1,135 @@
+using gold.structures.automaton.*
+using gold.visualization.automaton.*
+
+procedure main(args : String[]) begin
+
+  // Propositional letters
+  P := {'p','q','r','s'}
+
+  // Alphabet: propositional letters + parentheses + operator characters
+  Σ := {'p','q','r','s','(',')','&','|','=','<','>','0'}
+
+  // States
+  Q := {
+    // start
+    "q0",
+
+    // standalone (no outer parentheses)
+    "iL","iAND1","iOR1","iEQ1","iLT1","iLTEQ1","iAFTEROP","iNAND1","iNAND2",
+    "iNOT1","iNOT2","iNOT3","iF",
+
+    // inside-parentheses parsing
+    "pOpen","pL","pAND1","pOR1","pEQ1","pLT1","pLTEQ1","pAFTEROP","pNAND1","pNAND2",
+    "pNOT1","pNOT2","pNOT3","pU","pB",
+
+    // after a parenthesized formula (also chain-accepting)
+    "pf",
+
+    // chaining operators between parenthesized formulas
+    "cAND1","cOR1","cEQ1","cLT1","cLTEQ1","cNAND1","cNAND2","cOP_END"
+  }
+
+  // Initial and final states
+  q := "q0"
+  F := {"iL","iF","pf"}
+
+  // Transition relation (NFA, but built deterministically)
+  ∆ := 〚
+    // ===== Standalone: start with a propositional letter =====
+    〚"q0",'p',"iL"〛, 〚"q0",'q',"iL"〛, 〚"q0",'r',"iL"〛, 〚"q0",'s',"iL"〛,
+
+    // From a standalone letter, optionally read a binary operator
+    〚"iL",'&',"iAND1"〛,
+    〚"iAND1",'&',"iAFTEROP"〛,
+
+    〚"iL",'|',"iOR1"〛,
+    〚"iOR1",'|',"iAFTEROP"〛,
+
+    〚"iL",'=',"iEQ1"〛,
+    〚"iEQ1",'>',"iAFTEROP"〛,                 // =>
+    〚"iEQ1",'|',"iNAND1"〛,                   // =|)0
+    〚"iNAND1",')',"iNAND2"〛,
+    〚"iNAND2",'0',"iAFTEROP"〛,
+
+    〚"iL",'<',"iLT1"〛,
+    〚"iLT1",'=',"iLTEQ1"〛,
+    〚"iLTEQ1",'>',"iAFTEROP"〛,               // <=>
+    〚"iLTEQ1",'p',"iF"〛, 〚"iLTEQ1",'q',"iF"〛, 〚"iLTEQ1",'r',"iF"〛, 〚"iLTEQ1",'s',"iF"〛,   // <=
+
+    // After finishing a binary operator, expect the RHS propositional letter
+    〚"iAFTEROP",'p',"iF"〛, 〚"iAFTEROP",'q',"iF"〛, 〚"iAFTEROP",'r',"iF"〛, 〚"iAFTEROP",'s',"iF"〛,
+
+    // ===== Standalone: unary NOT =====
+    〚"q0",'|',"iNOT1"〛,      // |>0
+    〚"iNOT1",'>',"iNOT2"〛,
+    〚"iNOT2",'0',"iNOT3"〛,
+    〚"iNOT3",'p',"iF"〛, 〚"iNOT3",'q',"iF"〛, 〚"iNOT3",'r',"iF"〛, 〚"iNOT3",'s',"iF"〛,
+
+    // ===== Parenthesized formulas =====
+    〚"q0",'(',"pOpen"〛,
+
+    // Inside parentheses: start with letter
+    〚"pOpen",'p',"pL"〛, 〚"pOpen",'q',"pL"〛, 〚"pOpen",'r',"pL"〛, 〚"pOpen",'s',"pL"〛,
+
+    // Inside parentheses: or unary NOT
+    〚"pOpen",'|',"pNOT1"〛,
+    〚"pNOT1",'>',"pNOT2"〛,
+    〚"pNOT2",'0',"pNOT3"〛,
+    〚"pNOT3",'p',"pU"〛, 〚"pNOT3",'q',"pU"〛, 〚"pNOT3",'r',"pU"〛, 〚"pNOT3",'s',"pU"〛,
+
+    // If inside parentheses we only had a letter, we can close immediately
+    〚"pL",')',"pf"〛,
+
+    // Or, if inside parentheses we continue with a binary operator
+    〚"pL",'&',"pAND1"〛,
+    〚"pAND1",'&',"pAFTEROP"〛,
+
+    〚"pL",'|',"pOR1"〛,
+    〚"pOR1",'|',"pAFTEROP"〛,
+
+    〚"pL",'=',"pEQ1"〛,
+    〚"pEQ1",'>',"pAFTEROP"〛,                 // =>
+    〚"pEQ1",'|',"pNAND1"〛,                   // =|)0
+    〚"pNAND1",')',"pNAND2"〛,
+    〚"pNAND2",'0',"pAFTEROP"〛,
+
+    〚"pL",'<',"pLT1"〛,
+    〚"pLT1",'=',"pLTEQ1"〛,
+    〚"pLTEQ1",'>',"pAFTEROP"〛,               // <=>
+    〚"pLTEQ1",'p',"pB"〛, 〚"pLTEQ1",'q',"pB"〛, 〚"pLTEQ1",'r',"pB"〛, 〚"pLTEQ1",'s',"pB"〛,   // <=
+
+    // After completing binary operator in parentheses, expect RHS letter
+    〚"pAFTEROP",'p',"pB"〛, 〚"pAFTEROP",'q',"pB"〛, 〚"pAFTEROP",'r',"pB"〛, 〚"pAFTEROP",'s',"pB"〛,
+    〚"pB",')',"pf"〛,
+
+    // Unary NOT inside parentheses must close right away
+    〚"pU",')',"pf"〛,
+
+    // ===== Chaining: ( ... ) OP ( ... ) OP ... =====
+    // After a parenthesized formula, we may stop (pf is final) or continue with an operator
+    〚"pf",'&',"cAND1"〛,
+    〚"cAND1",'&',"cOP_END"〛,
+
+    〚"pf",'|',"cOR1"〛,
+    〚"cOR1",'|',"cOP_END"〛,
+
+    〚"pf",'=',"cEQ1"〛,
+    〚"cEQ1",'>',"cOP_END"〛,                   // =>
+    〚"cEQ1",'|',"cNAND1"〛,                    // =|)0
+    〚"cNAND1",')',"cNAND2"〛,
+    〚"cNAND2",'0',"cOP_END"〛,
+
+    〚"pf",'<',"cLT1"〛,
+    〚"cLT1",'=',"cLTEQ1"〛,
+    〚"cLTEQ1",'>',"cOP_END"〛,                 // <=>
+    〚"cLTEQ1",'(',"pOpen"〛,                   // <= ends here and starts next parenthesized formula
+
+    // After a (completed) operator, we must start the next parenthesized formula
+    〚"cOP_END",'(',"pOpen"〛
+
+  〛
+
+  A := GNondeterministicAutomaton(Q, Σ, q, F, ∆)
+  GAutomataFrame.show(A)
+
+end
